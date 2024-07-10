@@ -35,6 +35,36 @@ spec:
       serviceAccountName: {{ include "zulip.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # initContainers:
+      #     - name: setup
+      #       image: busybox:latest
+      #       command:
+      #       - sh
+      #       - -c
+      #       - |
+      #         mkdir -p /etc/zulip
+      #         cp /zulip.conf /etc/zulip/zulip.conf
+      #       volumeMounts:
+      #         - name: {{ include "zulip.fullname" . }}-cm
+      #           mountPath: /zulip.conf
+      #           subPath: zulip.conf
+      initContainers:
+        - name: setup
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              cp -a /etc/zulip/. /zulip.persistent/
+              (cat /etc/zulip/zulip.conf ; echo ; cat /zulip.additional.conf) > /zulip.persistent/zulip.conf
+              crudini --set /zulip.persistent/zulip.conf machine pgroonga enabled
+          volumeMounts:
+            - name: {{ include "zulip.fullname" . }}-conf
+              mountPath: /zulip.persistent
+            - name: {{ include "zulip.fullname" . }}-cm
+              mountPath: /zulip.additional.conf
+              subPath: zulip.conf 
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -50,6 +80,10 @@ spec:
               mountPath: /data
             - name: {{ include "zulip.fullname" . }}-post-setup-scripts
               mountPath: /data/post-setup.d
+            - name: {{ include "zulip.fullname" . }}-conf
+              mountPath: /etc/zulip
+            - name: {{ include "zulip.fullname" . }}-log
+              mountPath: /var/log/zulip
           env:
             {{ include "zulip.env" . | nindent 12 }}
           resources:
@@ -83,9 +117,22 @@ spec:
             failureThreshold: {{ .Values.startupProbe.failureThreshold }}
           {{- end }}
       volumes:
+        - name: {{ include "zulip.fullname" . }}-cm
+          configMap:
+            name: {{ include "zulip.fullname" . }}-cm
+            defaultMode: 0777
+            items:
+              - key: zulip.conf
+                path: zulip.conf
         - name: {{ include "zulip.fullname" . }}-persistent-storage
           persistentVolumeClaim:
             claimName: {{ if .Values.zulip.persistence.existingClaim }}{{ .Values.zulip.persistence.existingClaim }}{{- else }}{{ template "zulip.fullname" . }}-data{{- end }}
+        - name: {{ include "zulip.fullname" . }}-conf
+          persistentVolumeClaim:
+            claimName: {{ template "zulip.fullname" . }}-conf
+        - name: {{ include "zulip.fullname" . }}-log
+          persistentVolumeClaim:
+            claimName: {{ template "zulip.fullname" . }}-log
         - name: {{ include "zulip.fullname" . }}-post-setup-scripts
           configMap:
             name: {{ include "zulip.fullname" . }}-post-setup-scripts
