@@ -133,6 +133,9 @@ spec:
         - name: {{ include "zulip.fullname" . }}-log
           persistentVolumeClaim:
             claimName: {{ template "zulip.fullname" . }}-log
+        # - name: {{ include "zulip.fullname" . }}-ceph
+        #   persistentVolumeClaim:
+        #     claimName: {{ template "zulip.fullname" . }}-ceph
         - name: {{ include "zulip.fullname" . }}-post-setup-scripts
           configMap:
             name: {{ include "zulip.fullname" . }}-post-setup-scripts
